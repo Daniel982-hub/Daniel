@@ -53,3 +53,22 @@ def validar_progresso(progresso_texto):
         return 0 <= p <= 100
     except ValueError:
         return False
+        # ── Adiciona estas 2 funcoes ao teu utils.py existente ──────
+
+# contador para favoritos e recomendacoes (junta aos que ja tens)
+contador_favoritos     = 1
+contador_recomendacoes = 1
+
+# gera um ID para favorito no formato F001, F002, ...
+def gerar_id_favorito():
+    global contador_favoritos
+    novo_id = f"F{contador_favoritos:03d}"
+    contador_favoritos += 1
+    return novo_id
+
+# gera um ID para recomendacao no formato R001, R002, ...
+def gerar_id_recomendacao():
+    global contador_recomendacoes
+    novo_id = f"R{contador_recomendacoes:03d}"
+    contador_recomendacoes += 1
+    return novo_id
