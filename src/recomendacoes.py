@@ -58,7 +58,7 @@ def criar_recomendacao(uid, cid, motivo=None):
         "scoreRelevancia": score,
         "motivo":          motivo.strip()
     }
-    return 201, f"Recomendacao '{rid}' criada com sucesso. Score: {score}"
+    return 201, [rid]
 
 # ── CREATE (automatica diaria) ───────────────────────────────
 def gerar_recomendacoes_diarias():
@@ -112,13 +112,13 @@ def gerar_recomendacoes_diarias():
 # ── READ (todas) ─────────────────────────────────────────────
 def listar_recomendacoes():
     if not recomendacoes:
-        return 404, "Nenhuma recomendacao registada."
+        return 404, [rid]
     return 200, recomendacoes
 
 # ── READ (uma por ID) ────────────────────────────────────────
 def obter_recomendacao(rid):
     if rid not in recomendacoes:
-        return 404, f"Recomendacao '{rid}' nao encontrada."
+        return 404, [rid]
     return 200, recomendacoes[rid]
 
 # ── READ (por utilizador) ────────────────────────────────────
@@ -129,7 +129,7 @@ def obter_recomendacoes_utilizador(uid):
 
     registos = {rid: r for rid, r in recomendacoes.items() if r["idUtilizador"] == uid}
     if not registos:
-        return 404, f"Nenhuma recomendacao encontrada para o utilizador '{uid}'."
+        return 404, [rid]
     return 200, registos
 
 # ── UPDATE ───────────────────────────────────────────────────
@@ -147,16 +147,16 @@ def atualizar_recomendacao(rid, motivo=None, score_relevancia=None):
                 return 400, "Score invalido. Use um valor entre 0 e 10."
             recomendacoes[rid]["scoreRelevancia"] = score
 
-        return 200, "Recomendacao atualizada com sucesso."
+        return 200, [rid]
     except Exception as e:
         return 500, str(e)
 
 # ── DELETE ───────────────────────────────────────────────────
 def remover_recomendacao(rid):
     if rid not in recomendacoes:
-        return 404, f"Recomendacao '{rid}' nao encontrada."
+        return 404, [rid]
     try:
         del recomendacoes[rid]
-        return 200, f"Recomendacao '{rid}' removida com sucesso."
+        return 200, [rid]
     except Exception as e:
         return 500, str(e)
