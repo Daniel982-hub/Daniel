@@ -1,7 +1,7 @@
 # ==============================
 # recomendacoes.py
 # armazena e gere as recomendacoes
-# retorna tuplos (codigo_http, mensagem)
+# retorna tuplos (codigo_http, dados)
 #
 # Logica automatica diaria:
 #   cada utilizador recebe 1 recomendacao
@@ -15,7 +15,6 @@ import conteudo as bd_conteudo
 
 recomendacoes = {}
 
-# motivos possiveis gerados automaticamente
 MOTIVOS_AUTO = [
     "Baseado nas tendencias do dia",
     "Muito popular entre utilizadores com o mesmo plano",
@@ -27,11 +26,10 @@ MOTIVOS_AUTO = [
 
 # ── helper: calcula score de relevancia ─────────────────────
 def _calcular_score(dados_conteudo):
-    """Score baseado na avaliacao e numero de avaliadores (0.0 - 10.0)."""
-    avaliacao  = dados_conteudo.get("avaliacao", 5.0)
-    num_aval   = dados_conteudo.get("numeroAvaliadores", 0)
-    bonus      = min(num_aval / 10000, 1.0)   # bonus max de 1.0
-    score      = round((avaliacao * 0.9) + bonus, 1)
+    avaliacao = dados_conteudo.get("avaliacao", 5.0)
+    num_aval  = dados_conteudo.get("numeroAvaliadores", 0)
+    bonus     = min(num_aval / 10000, 1.0)
+    score     = round((avaliacao * 0.9) + bonus, 1)
     return min(score, 10.0)
 
 # ── CREATE (manual) ──────────────────────────────────────────
@@ -58,7 +56,7 @@ def criar_recomendacao(uid, cid, motivo=None):
         "scoreRelevancia": score,
         "motivo":          motivo.strip()
     }
-    return 201, [rid]
+    return 201, rid
 
 # ── CREATE (automatica diaria) ───────────────────────────────
 def gerar_recomendacoes_diarias():
@@ -74,14 +72,13 @@ def gerar_recomendacoes_diarias():
     if codigo_c == 404:
         return 404, "Nenhum conteudo disponivel para recomendar."
 
-    hoje    = datetime.now().strftime("%d/%m/%Y")
-    geradas = 0
-    ja_tinham = 0
-
+    hoje          = datetime.now().strftime("%d/%m/%Y")
+    geradas       = 0
+    ja_tinham     = 0
+    ultimo_rid    = None
     lista_conteudos = list(conteudos_data.values())
 
     for uid in utilizadores_data:
-        # verifica se o utilizador ja recebeu recomendacao hoje
         ja_recebeu = any(
             r["idUtilizador"] == uid and r["dataGeracao"].startswith(hoje)
             for r in recomendacoes.values()
@@ -90,10 +87,8 @@ def gerar_recomendacoes_diarias():
             ja_tinham += 1
             continue
 
-        # escolhe o conteudo com maior score (com alguma aleatoriedade)
         escolhido = max(lista_conteudos,
                         key=lambda c: _calcular_score(c) + random.uniform(0, 1.5))
-
         rid   = gerar_id_recomendacao()
         score = _calcular_score(escolhido)
 
@@ -105,20 +100,23 @@ def gerar_recomendacoes_diarias():
             "scoreRelevancia": score,
             "motivo":          random.choice(MOTIVOS_AUTO)
         }
+        ultimo_rid = rid
         geradas += 1
 
-    return 200, f"Recomendacoes diarias geradas: {geradas} | Utilizadores ja com recomendacao hoje: {ja_tinham}"
+    if ultimo_rid:
+        return 200, ultimo_rid
+    return 200, "Nenhuma nova recomendacao gerada."
 
 # ── READ (todas) ─────────────────────────────────────────────
 def listar_recomendacoes():
     if not recomendacoes:
-        return 404, [rid]
+        return 404, "Nenhuma recomendacao registada."
     return 200, recomendacoes
 
 # ── READ (uma por ID) ────────────────────────────────────────
 def obter_recomendacao(rid):
     if rid not in recomendacoes:
-        return 404, [rid]
+        return 404, f"Recomendacao '{rid}' nao encontrada."
     return 200, recomendacoes[rid]
 
 # ── READ (por utilizador) ────────────────────────────────────
@@ -129,7 +127,7 @@ def obter_recomendacoes_utilizador(uid):
 
     registos = {rid: r for rid, r in recomendacoes.items() if r["idUtilizador"] == uid}
     if not registos:
-        return 404, [rid]
+        return 404, f"Nenhuma recomendacao encontrada para o utilizador '{uid}'."
     return 200, registos
 
 # ── UPDATE ───────────────────────────────────────────────────
@@ -147,16 +145,16 @@ def atualizar_recomendacao(rid, motivo=None, score_relevancia=None):
                 return 400, "Score invalido. Use um valor entre 0 e 10."
             recomendacoes[rid]["scoreRelevancia"] = score
 
-        return 200, [rid]
+        return 200, rid
     except Exception as e:
         return 500, str(e)
 
 # ── DELETE ───────────────────────────────────────────────────
 def remover_recomendacao(rid):
     if rid not in recomendacoes:
-        return 404, [rid]
+        return 404, f"Recomendacao '{rid}' nao encontrada."
     try:
         del recomendacoes[rid]
-        return 200, [rid]
+        return 200, rid
     except Exception as e:
         return 500, str(e)
