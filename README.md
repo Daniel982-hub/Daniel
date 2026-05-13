@@ -8,27 +8,26 @@ Permite gerir utilizadores, conteúdos, histórico de visualizações, favoritos
 ## Estrutura do Projeto
 
 ```
-src/
 ├── main.py                   # Ponto de entrada — menu interativo no terminal
 ├── utils.py                  # Funções auxiliares (geração de IDs, validações)
 ├── utilizadores.py           # CRUD de Utilizadores
 ├── conteudo.py               # CRUD de Conteúdos (filmes e séries)
 ├── historico.py              # CRUD de Histórico de Visualizações
 ├── favoritos.py              # CRUD de Favoritos
-├── recomendacoes.py          # CRUD de Recomendações + geração automática diária
-└── recomendacoes_server.py   # Servidor HTTP para as Recomendações (porta 8001)
+├── recomendacoes.py          # CRUD de Recomendações
+└── recomendacoes_server.py   # Gera recomendações automáticas a cada 10 segundos
 ```
 
 ---
 
 ## Como Executar
 
-### Terminal principal (menu interativo)
+### Terminal 1 — menu interativo
 ```bash
 python main.py
 ```
 
-### Servidor HTTP de Recomendações (terminal separado)
+### Terminal 2 — recomendações automáticas
 ```bash
 python recomendacoes_server.py
 ```
@@ -93,50 +92,22 @@ python recomendacoes_server.py
 
 ---
 
-## Servidor HTTP — Recomendações
+## Recomendações Automáticas
 
-Base URL: `http://localhost:8001`
+O `recomendacoes_server.py` corre num terminal separado e a cada **10 segundos** gera automaticamente uma recomendação para cada utilizador com base nos seus favoritos:
 
-| Método | Endpoint | Descrição |
-|--------|----------|-----------|
-| GET | `/recomendacoes` | Lista todas as recomendações |
-| GET | `/recomendacoes/<rid>` | Obtém uma recomendação por ID |
-| GET | `/recomendacoes/utilizador/<uid>` | Recomendações de um utilizador |
-| POST | `/recomendacoes` | Cria recomendação manual |
-| POST | `/recomendacoes/diarias` | Gera recomendações diárias automáticas |
-| PUT | `/recomendacoes/<rid>` | Atualiza uma recomendação |
-| DELETE | `/recomendacoes/<rid>` | Remove uma recomendação |
+1. Se o utilizador tiver **favoritos**, recomenda um conteúdo do mesmo género que ainda não está na lista.
+2. Se **não tiver favoritos**, recomenda o conteúdo com maior avaliação global.
 
-### Lógica de Recomendação Automática
-O endpoint `POST /recomendacoes/diarias` percorre todos os utilizadores e para cada um:
-1. Verifica se já recebeu uma recomendação hoje — se sim, ignora.
-2. Se tiver **favoritos**, recomenda um conteúdo do mesmo género que ainda não está nos favoritos.
-3. Se **não tiver favoritos**, recomenda o conteúdo com maior avaliação global.
-
-### Exemplos de Pedidos
-
-**Criar recomendação manual:**
-```json
-POST /recomendacoes
-{
-  "idUtilizador": "U001",
-  "idConteudo": "C002",
-  "motivo": "Escolha do editor"
-}
+Exemplo do output no terminal:
 ```
-
-**Atualizar recomendação:**
-```json
-PUT /recomendacoes/R001
-{
-  "motivo": "Tendencia popular",
-  "scoreRelevancia": 9.0
-}
+[14:23:01] U001 -> R001 (Baseado nos seus favoritos (Drama))
+[14:23:01] U002 -> R002 (Mais popular da plataforma)
 ```
 
 ---
 
-## Códigos HTTP Utilizados
+## Códigos de Retorno
 
 | Código | Significado |
 |--------|-------------|
