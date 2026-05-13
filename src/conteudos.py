@@ -1,178 +1,115 @@
 # ==============================
-# conteudos.py
-# CRUD da entidade Conteudo
-# armazenamento em dicionario
-# validacoes feitas aqui (nao no main)
-# retorna codigos de estado ao estilo HTTP
+# conteudo.py
+# armazena e gere os conteudos
+# retorna tuplos (codigo_http, mensagem)
 # ==============================
-from utils import gerar_id_conteudo, validar_ano
+import json, os
+from utils import gerar_id_conteudo, validar_nao_vazio, validar_tipo, validar_ano, validar_avaliacao
 
-# tipos de conteudo aceites
-TIPOS_VALIDOS = ["filme", "serie"]
-
-# classificacoes etarias aceites
-CLASSIFICACOES_VALIDAS = ["g", "pg", "pg-13", "m/12", "m/16", "m/18"]
-
-# dicionario principal onde ficam guardados todos os conteudos
-# chave: ID gerado automaticamente (ex: C001)
-# valor: dicionario com os dados do conteudo
+FICHEIRO = "conteudos.json"
 conteudos = {}
 
-# ── CREATE ───────────────────────────────────────────────────────────────────
-def criar_conteudo(titulo, tipo, genero, anoLancamento, classificacaoEtaria,
-                   avaliacao, numeroAvaliadores, duracao_ou_temporadas, produtor, realizador):
+def guardar():
+    with open(FICHEIRO, "w", encoding="utf-8") as f:
+        json.dump(conteudos, f, indent=4, ensure_ascii=False)
 
-    # valida o tipo
-    if tipo.lower() not in TIPOS_VALIDOS:
-        return 400, f"Tipo invalido. Escolha: {', '.join(TIPOS_VALIDOS)}"
+def carregar():
+    global conteudos
+    if os.path.exists(FICHEIRO):
+        with open(FICHEIRO, "r", encoding="utf-8") as f:
+            conteudos = json.load(f)
+    else:
+        conteudos = {}
 
-    # valida o ano de lancamento
-    if not validar_ano(anoLancamento):
-        return 400, "Ano de lancamento invalido. Deve ser um ano entre 1888 e o ano atual."
-
-    # valida a classificacao etaria
-    if classificacaoEtaria.lower() not in CLASSIFICACOES_VALIDAS:
-        return 400, f"Classificacao invalida. Escolha: {', '.join(CLASSIFICACOES_VALIDAS)}"
-
-    # valida a avaliacao (0.0 a 10.0)
-    try:
-        avaliacao = float(avaliacao)
-        if avaliacao < 0.0 or avaliacao > 10.0:
-            return 400, "Avaliacao invalida. Deve ser um valor entre 0.0 e 10.0."
-    except ValueError:
-        return 400, "Avaliacao invalida. Introduz um numero entre 0.0 e 10.0."
-
-    # valida numero de avaliadores
-    try:
-        numeroAvaliadores = int(numeroAvaliadores)
-        if numeroAvaliadores < 0:
-            return 400, "Numero de avaliadores invalido. Deve ser um inteiro positivo."
-    except ValueError:
-        return 400, "Numero de avaliadores invalido. Introduz um numero inteiro."
-
-    # valida duracao (filme em minutos) ou numero de temporadas (serie)
-    try:
-        duracao_ou_temporadas = int(duracao_ou_temporadas)
-        if duracao_ou_temporadas <= 0:
-            return 400, "Valor invalido. Deve ser um inteiro positivo."
-    except ValueError:
-        return 400, "Valor invalido. Introduz um numero inteiro."
-
-    try:
-        cid = gerar_id_conteudo()
-        dados = {
-            "titulo":              titulo,
-            "tipo":                tipo.lower(),
-            "genero":              genero,
-            "anoLancamento":       int(anoLancamento),
-            "classificacaoEtaria": classificacaoEtaria.lower(),
-            "avaliacao":           avaliacao,
-            "numeroAvaliadores":   numeroAvaliadores,
-            "produtor":            produtor,
-            "realizador":          realizador
-        }
-        # campo especifico conforme o tipo
-        if tipo.lower() == "filme":
-            dados["duracao"] = duracao_ou_temporadas          # minutos
-        else:
-            dados["numeroTemporadas"] = duracao_ou_temporadas
-
-        conteudos[cid] = dados
-        return 201, cid
-    except Exception as e:
-        return 500, str(e)
-
-# ── READ - listar todos ──────────────────────────────────────────────────────
-def listar_conteudos():
-    if not conteudos:
-        return 404, "Nao existem conteudos registados."
-
-    try:
-        for cid, d in conteudos.items():
-            if d["tipo"] == "filme":
-                extra = f"Duracao: {d.get('duracao', '?')} min"
-            else:
-                extra = f"Temporadas: {d.get('numeroTemporadas', '?')}"
-            print(f"  ID: {cid} | {d['titulo']} ({d['tipo'].capitalize()}) | "
-                  f"Genero: {d['genero']} | Ano: {d['anoLancamento']} | "
-                  f"Avaliacao: {d['avaliacao']}/10 | {extra}")
-        return 200, "Conteudos listados com sucesso."
-    except Exception as e:
-        return 500, str(e)
-
-# ── READ - consultar individual ──────────────────────────────────────────────
-def consultar_conteudo(cid):
-    # retorna 404 se o ID nao existir
-    if cid not in conteudos:
-        return 404, "Conteudo nao encontrado."
-
-    try:
-        return 200, conteudos[cid]
-    except Exception as e:
-        return 500, str(e)
-
-# ── UPDATE ───────────────────────────────────────────────────────────────────
-def atualizar_conteudo(cid, titulo, genero, anoLancamento, classificacaoEtaria,
-                       avaliacao, numeroAvaliadores, duracao_ou_temporadas, produtor, realizador):
-    # retorna 404 se o ID nao existir
-    if cid not in conteudos:
-        return 404, "Conteudo nao encontrado."
-
-    # valida os campos opcionais que foram preenchidos
-    if anoLancamento and not validar_ano(anoLancamento):
+# ── CREATE ──────────────────────────────────────────────────
+def criar_conteudo(titulo, tipo, genero, ano_lancamento, classificacao_etaria,
+                   avaliacao, numero_avaliadores, produtor, realizador,
+                   duracao=0, numero_temporadas=0):
+    carregar()
+    if not validar_nao_vazio(titulo):
+        return 400, "Titulo nao pode estar vazio."
+    if not validar_tipo(tipo):
+        return 400, "Tipo invalido. Use 'filme' ou 'serie'."
+    if not validar_nao_vazio(genero):
+        return 400, "Genero nao pode estar vazio."
+    if not validar_ano(str(ano_lancamento)):
         return 400, "Ano de lancamento invalido."
+    if not validar_nao_vazio(classificacao_etaria):
+        return 400, "Classificacao etaria nao pode estar vazia."
+    if not validar_avaliacao(str(avaliacao)):
+        return 400, "Avaliacao invalida. Use um valor entre 0 e 10."
+    if not validar_nao_vazio(produtor):
+        return 400, "Produtor nao pode estar vazio."
+    if not validar_nao_vazio(realizador):
+        return 400, "Realizador nao pode estar vazio."
 
-    if classificacaoEtaria and classificacaoEtaria.lower() not in CLASSIFICACOES_VALIDAS:
-        return 400, f"Classificacao invalida. Escolha: {', '.join(CLASSIFICACOES_VALIDAS)}"
+    cid = gerar_id_conteudo()
+    conteudos[cid] = {
+        "idConteudo":          cid,
+        "titulo":              titulo.strip(),
+        "tipo":                tipo.lower().strip(),
+        "genero":              genero.strip(),
+        "anoLancamento":       int(ano_lancamento),
+        "classificacaoEtaria": classificacao_etaria.strip(),
+        "avaliacao":           round(float(avaliacao), 1),
+        "numeroAvaliadores":   int(numero_avaliadores),
+        "duracao":             int(duracao),
+        "numeroTemporadas":    int(numero_temporadas),
+        "produtor":            produtor.strip(),
+        "realizador":          realizador.strip()
+    }
+    guardar()
+    return 201, cid
 
-    if avaliacao:
-        try:
-            avaliacao = float(avaliacao)
-            if avaliacao < 0.0 or avaliacao > 10.0:
-                return 400, "Avaliacao invalida. Deve ser entre 0.0 e 10.0."
-        except ValueError:
-            return 400, "Avaliacao invalida."
+# ── READ (todos) ─────────────────────────────────────────────
+def listar_conteudos():
+    carregar()
+    if not conteudos:
+        return 404, "Nenhum conteudo registado."
+    return 200, conteudos
 
-    if numeroAvaliadores:
-        try:
-            numeroAvaliadores = int(numeroAvaliadores)
-        except ValueError:
-            return 400, "Numero de avaliadores invalido."
-
-    if duracao_ou_temporadas:
-        try:
-            duracao_ou_temporadas = int(duracao_ou_temporadas)
-            if duracao_ou_temporadas <= 0:
-                return 400, "Valor invalido. Deve ser um inteiro positivo."
-        except ValueError:
-            return 400, "Valor invalido. Introduz um numero inteiro."
-
-    try:
-        # atualiza os campos que foram preenchidos (nao None)
-        if titulo:               conteudos[cid]["titulo"]              = titulo
-        if genero:               conteudos[cid]["genero"]              = genero
-        if anoLancamento:        conteudos[cid]["anoLancamento"]       = int(anoLancamento)
-        if classificacaoEtaria:  conteudos[cid]["classificacaoEtaria"] = classificacaoEtaria.lower()
-        if avaliacao:            conteudos[cid]["avaliacao"]           = avaliacao
-        if numeroAvaliadores:    conteudos[cid]["numeroAvaliadores"]   = numeroAvaliadores
-        if duracao_ou_temporadas:
-            campo = "duracao" if conteudos[cid]["tipo"] == "filme" else "numeroTemporadas"
-            conteudos[cid][campo] = duracao_ou_temporadas
-        if produtor:             conteudos[cid]["produtor"]            = produtor
-        if realizador:           conteudos[cid]["realizador"]          = realizador
-
-        return 200, "Conteudo atualizado com sucesso."
-    except Exception as e:
-        return 500, str(e)
-
-# ── DELETE ───────────────────────────────────────────────────────────────────
-def remover_conteudo(cid):
-    # retorna 404 se o ID nao existir
+# ── READ (um) ────────────────────────────────────────────────
+def obter_conteudo(cid):
+    carregar()
     if cid not in conteudos:
-        return 404, "Conteudo nao encontrado."
+        return 404, f"Conteudo '{cid}' nao encontrado."
+    return 200, cid
 
-    try:
-        del conteudos[cid]
-        return 200, "Conteudo removido com sucesso."
-    except Exception as e:
-        return 500, str(e)
+# ── UPDATE ───────────────────────────────────────────────────
+def atualizar_conteudo(cid, titulo=None, tipo=None, genero=None, ano_lancamento=None,
+                        classificacao_etaria=None, avaliacao=None, numero_avaliadores=None,
+                        duracao=None, numero_temporadas=None, produtor=None, realizador=None):
+    carregar()
+    if cid not in conteudos:
+        return 404, f"Conteudo '{cid}' nao encontrado."
+    if titulo:               conteudos[cid]["titulo"]              = titulo.strip()
+    if tipo:
+        if not validar_tipo(tipo):
+            return 400, "Tipo invalido. Use 'filme' ou 'serie'."
+        conteudos[cid]["tipo"]                = tipo.lower().strip()
+    if genero:               conteudos[cid]["genero"]              = genero.strip()
+    if ano_lancamento:
+        if not validar_ano(str(ano_lancamento)):
+            return 400, "Ano de lancamento invalido."
+        conteudos[cid]["anoLancamento"]       = int(ano_lancamento)
+    if classificacao_etaria: conteudos[cid]["classificacaoEtaria"] = classificacao_etaria.strip()
+    if avaliacao is not None:
+        if not validar_avaliacao(str(avaliacao)):
+            return 400, "Avaliacao invalida. Use um valor entre 0 e 10."
+        conteudos[cid]["avaliacao"]           = round(float(avaliacao), 1)
+    if numero_avaliadores:   conteudos[cid]["numeroAvaliadores"]   = int(numero_avaliadores)
+    if duracao is not None:  conteudos[cid]["duracao"]             = int(duracao)
+    if numero_temporadas is not None: conteudos[cid]["numeroTemporadas"] = int(numero_temporadas)
+    if produtor:             conteudos[cid]["produtor"]            = produtor.strip()
+    if realizador:           conteudos[cid]["realizador"]          = realizador.strip()
+    guardar()
+    return 200, cid
+
+# ── DELETE ───────────────────────────────────────────────────
+def remover_conteudo(cid):
+    carregar()
+    if cid not in conteudos:
+        return 404, f"Conteudo '{cid}' nao encontrado."
+    del conteudos[cid]
+    guardar()
+    return 200, cid
