@@ -34,6 +34,38 @@ python recomendacoes_server.py
 
 ---
 
+## Persistência de Dados
+
+Cada módulo guarda os seus dados num ficheiro JSON criado automaticamente na mesma pasta:
+
+| Ficheiro | Dados |
+|----------|-------|
+| `utilizadores.json` | Utilizadores |
+| `conteudos.json` | Conteúdos |
+| `historico.json` | Histórico de visualizações |
+| `favoritos.json` | Favoritos |
+| `recomendacoes.json` | Recomendações |
+
+Todas as operações chamam `carregar()` no início e `guardar()` antes de retornar, garantindo que os dados persistem entre sessões.
+
+---
+
+## Convenção de Retorno
+
+Todas as funções retornam um tuplo `(codigo_http, dados)` onde `dados` é sempre o **ID** do registo afetado:
+
+| Operação | Código | Retorno |
+|----------|--------|---------|
+| Criar | 201 | ID do registo criado |
+| Obter | 200 | ID do registo |
+| Atualizar | 200 | ID do registo atualizado |
+| Remover | 200 | ID do registo removido |
+| Listar todos | 200 | Dicionário completo |
+| Listar por utilizador | 200 | Lista de IDs |
+| Erro | 400/404/409/500 | Mensagem de erro |
+
+---
+
 ## Entidades
 
 ### Utilizador
@@ -101,6 +133,8 @@ O `recomendacoes_server.py` corre num terminal separado e a cada **10 segundos**
 
 Exemplo do output no terminal:
 ```
+Servidor de recomendacoes iniciado — gera a cada 10 segundos. CTRL+C para parar.
+
 [14:23:01] U001 -> R001 (Baseado nos seus favoritos (Drama))
 [14:23:01] U002 -> R002 (Mais popular da plataforma)
 ```
