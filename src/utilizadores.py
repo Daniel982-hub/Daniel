@@ -1,125 +1,91 @@
 # ==============================
 # utilizadores.py
-# CRUD da entidade Utilizador
-# armazenamento em dicionario
-# validacoes feitas aqui (nao no main)
-# retorna codigos de estado ao estilo HTTP
+# armazena e gere os utilizadores
+# retorna tuplos (codigo_http, mensagem)
 # ==============================
-from utils import gerar_id_utilizador, validar_email
+import json, os
+from utils import gerar_id_utilizador, validar_email, validar_plano, validar_nao_vazio
 
-# tipos de plano aceites
-TIPOS_PLANO_VALIDOS = ["basico", "standard", "premium"]
-
-# estados aceites
-ESTADOS_VALIDOS = ["ativo", "inativo", "suspenso"]
-
-# dicionario principal onde ficam guardados todos os utilizadores
-# chave: ID gerado automaticamente (ex: U001)
-# valor: dicionario com os dados do utilizador
+FICHEIRO = "utilizadores.json"
 utilizadores = {}
 
-# ── CREATE ───────────────────────────────────────────────────────────────────
-def criar_utilizador(nome, email, palavraPasse, tipoPlan, estado):
+def guardar():
+    with open(FICHEIRO, "w", encoding="utf-8") as f:
+        json.dump(utilizadores, f, indent=4, ensure_ascii=False)
 
-    # valida o email
+def carregar():
+    global utilizadores
+    if os.path.exists(FICHEIRO):
+        with open(FICHEIRO, "r", encoding="utf-8") as f:
+            utilizadores = json.load(f)
+    else:
+        utilizadores = {}
+
+# ── CREATE ──────────────────────────────────────────────────
+def criar_utilizador(nome, email, palavrapasse, tipo_plano):
+    carregar()
+    if not validar_nao_vazio(nome):
+        return 400, "Nome nao pode estar vazio."
     if not validar_email(email):
-        return 400, "Email invalido. Deve conter '@' e '.' apos o '@'."
-
-    # verifica se o email ja esta em uso
+        return 400, "Email invalido."
+    if not validar_nao_vazio(palavrapasse):
+        return 400, "Palavra-passe nao pode estar vazia."
+    if not validar_plano(tipo_plano):
+        return 400, "Plano invalido. Use 'basic' ou 'premium'."
     for u in utilizadores.values():
         if u["email"] == email:
-            return 400, "Ja existe um utilizador com esse email."
+            return 409, "Ja existe um utilizador com esse email."
 
-    # valida o tipo de plano
-    if tipoPlan.lower() not in TIPOS_PLANO_VALIDOS:
-        return 400, f"Tipo de plano invalido. Escolha: {', '.join(TIPOS_PLANO_VALIDOS)}"
+    uid = gerar_id_utilizador()
+    utilizadores[uid] = {
+        "idUtilizador": uid,
+        "nome":         nome.strip(),
+        "email":        email.strip(),
+        "palavraPasse": palavrapasse.strip(),
+        "tipoPlano":    tipo_plano.lower().strip(),
+        "estado":       1
+    }
+    guardar()
+    return 201, uid
 
-    # valida o estado
-    if estado.lower() not in ESTADOS_VALIDOS:
-        return 400, f"Estado invalido. Escolha: {', '.join(ESTADOS_VALIDOS)}"
-
-    # valida a password (minimo 6 caracteres)
-    if len(palavraPasse) < 6:
-        return 400, "Password invalida. Deve ter pelo menos 6 caracteres."
-
-    try:
-        uid = gerar_id_utilizador()
-        utilizadores[uid] = {
-            "nome":        nome,
-            "email":       email,
-            "palavraPasse": palavraPasse,
-            "tipoPlan":    tipoPlan.lower(),   # guarda sempre em minusculas
-            "estado":      estado.lower()
-        }
-        return 201, utilizadores[uid]
-    except Exception as e:
-        return 500, str(e)
-
-# ── READ - listar todos ──────────────────────────────────────────────────────
+# ── READ (todos) ─────────────────────────────────────────────
 def listar_utilizadores():
+    carregar()
     if not utilizadores:
-        return 404, "Nao existem utilizadores registados."
+        return 404, "Nenhum utilizador registado."
+    return 200, utilizadores
 
-    try:
-        return 200, utilizadores
-    except Exception as e:
-        return 500, str(e)
-
-# ── READ - consultar individual ──────────────────────────────────────────────
-def consultar_utilizador(uid):
-    # retorna 404 se o ID nao existir
+# ── READ (um) ────────────────────────────────────────────────
+def obter_utilizador(uid):
+    carregar()
     if uid not in utilizadores:
-        return 404, "Utilizador nao encontrado."
+        return 404, f"Utilizador '{uid}' nao encontrado."
+    return 200, uid
 
-    try:
-        return 200, utilizadores[uid]
-    except Exception as e:
-        return 500, str(e)
-
-# ── UPDATE ───────────────────────────────────────────────────────────────────
-def atualizar_utilizador(uid, nome, email, palavraPasse, tipoPlan, estado):
-    # retorna 404 se o ID nao existir
+# ── UPDATE ───────────────────────────────────────────────────
+def atualizar_utilizador(uid, nome=None, email=None, palavrapasse=None, tipo_plano=None, estado=None):
+    carregar()
     if uid not in utilizadores:
-        return 404, "Utilizador nao encontrado."
-
-    # valida os campos opcionais que foram preenchidos
-    if email and not validar_email(email):
-        return 400, "Email invalido."
-
+        return 404, f"Utilizador '{uid}' nao encontrado."
+    if nome:        utilizadores[uid]["nome"]        = nome.strip()
     if email:
-        for oid, u in utilizadores.items():
-            if u["email"] == email and oid != uid:
-                return 400, "Ja existe um utilizador com esse email."
+        if not validar_email(email):
+            return 400, "Email invalido."
+        utilizadores[uid]["email"]       = email.strip()
+    if palavrapasse: utilizadores[uid]["palavraPasse"] = palavrapasse.strip()
+    if tipo_plano:
+        if not validar_plano(tipo_plano):
+            return 400, "Plano invalido. Use 'basic' ou 'premium'."
+        utilizadores[uid]["tipoPlano"]   = tipo_plano.lower().strip()
+    if estado is not None: utilizadores[uid]["estado"] = estado
+    guardar()
+    return 200, uid
 
-    if tipoPlan and tipoPlan.lower() not in TIPOS_PLANO_VALIDOS:
-        return 400, f"Tipo de plano invalido. Escolha: {', '.join(TIPOS_PLANO_VALIDOS)}"
-
-    if estado and estado.lower() not in ESTADOS_VALIDOS:
-        return 400, f"Estado invalido. Escolha: {', '.join(ESTADOS_VALIDOS)}"
-
-    if palavraPasse and len(palavraPasse) < 6:
-        return 400, "Password invalida. Deve ter pelo menos 6 caracteres."
-
-    try:
-        # atualiza os campos que foram preenchidos (nao None)
-        if nome:         utilizadores[uid]["nome"]        = nome
-        if email:        utilizadores[uid]["email"]       = email
-        if palavraPasse: utilizadores[uid]["palavraPasse"] = palavraPasse
-        if tipoPlan:     utilizadores[uid]["tipoPlan"]    = tipoPlan.lower()
-        if estado:       utilizadores[uid]["estado"]      = estado.lower()
-
-        return 200, "Utilizador atualizado com sucesso."
-    except Exception as e:
-        return 500, str(e)
-
-# ── DELETE ───────────────────────────────────────────────────────────────────
+# ── DELETE ───────────────────────────────────────────────────
 def remover_utilizador(uid):
-    # retorna 404 se o ID nao existir
+    carregar()
     if uid not in utilizadores:
-        return 404, "Utilizador nao encontrado."
-
-    try:
-        del utilizadores[uid]
-        return 200, "Utilizador removido com sucesso."
-    except Exception as e:
-        return 500, str(e)
+        return 404, f"Utilizador '{uid}' nao encontrado."
+    del utilizadores[uid]
+    guardar()
+    return 200, uid

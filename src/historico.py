@@ -1,98 +1,87 @@
 # ==============================
 # historico.py
-# CRUD da entidade HistoricoVisualizacao
-# armazenamento em dicionario
-# validacoes feitas aqui (nao no main)
-# retorna codigos de estado ao estilo HTTP
+# armazena e gere o historico de visualizacoes
+# retorna tuplos (codigo_http, mensagem)
 # ==============================
-from utils import gerar_id_historico, validar_progresso
+import json, os
 from datetime import datetime
+from utils import gerar_id_historico, validar_progresso
+import utilizadores as bd_utilizadores
+import conteudo as bd_conteudo
 
-# dicionario principal onde ficam guardados todos os registos de historico
-# chave: ID gerado automaticamente (ex: H001)
-# valor: dicionario com os dados do historico
+FICHEIRO = "historico.json"
 historico = {}
 
-# ── CREATE ───────────────────────────────────────────────────────────────────
-def criar_historico(idUtilizador, idConteudo, progresso, utilizadores_dict, conteudos_dict):
+def guardar():
+    with open(FICHEIRO, "w", encoding="utf-8") as f:
+        json.dump(historico, f, indent=4, ensure_ascii=False)
 
-    # verifica se o utilizador existe
-    if idUtilizador not in utilizadores_dict:
-        return 404, "Utilizador nao encontrado."
+def carregar():
+    global historico
+    if os.path.exists(FICHEIRO):
+        with open(FICHEIRO, "r", encoding="utf-8") as f:
+            historico = json.load(f)
+    else:
+        historico = {}
 
-    # verifica se o conteudo existe
-    if idConteudo not in conteudos_dict:
-        return 404, "Conteudo nao encontrado."
+# ── CREATE ──────────────────────────────────────────────────
+def registar_visualizacao(uid, cid, progresso):
+    carregar()
+    codigo, _ = bd_utilizadores.obter_utilizador(uid)
+    if codigo == 404:
+        return 404, f"Utilizador '{uid}' nao encontrado."
+    codigo, _ = bd_conteudo.obter_conteudo(cid)
+    if codigo == 404:
+        return 404, f"Conteudo '{cid}' nao encontrado."
+    if not validar_progresso(str(progresso)):
+        return 400, "Progresso invalido. Use um valor entre 0 e 100."
 
-    # valida o progresso (0 a 100)
-    if not validar_progresso(progresso):
-        return 400, "Progresso invalido. Deve ser um valor inteiro entre 0 e 100."
+    hid = gerar_id_historico()
+    historico[hid] = {
+        "idHistorico":      hid,
+        "idUtilizador":     uid,
+        "idConteudo":       cid,
+        "dataVisualizacao": datetime.now().strftime("%d/%m/%Y %H:%M"),
+        "progresso":        round(float(progresso), 1)
+    }
+    guardar()
+    return 201, hid
 
-    try:
-        hid = gerar_id_historico()
-        historico[hid] = {
-            "idUtilizador":     idUtilizador,
-            "idConteudo":       idConteudo,
-            "dataVisualizacao": datetime.now().strftime("%d/%m/%Y %H:%M"),
-            "progresso":        int(progresso)
-        }
-        return 201, hid
-    except Exception as e:
-        return 500, str(e)
-
-# ── READ - listar todos ──────────────────────────────────────────────────────
+# ── READ (todos) ─────────────────────────────────────────────
 def listar_historico():
+    carregar()
     if not historico:
-        return 404, "Nao existem registos de historico."
+        return 404, "Nenhuma visualizacao registada."
+    return 200, historico
 
-    try:
-        for hid, d in historico.items():
-            print(f"  ID: {hid} | Utilizador: {d['idUtilizador']} | "
-                  f"Conteudo: {d['idConteudo']} | "
-                  f"Data: {d['dataVisualizacao']} | "
-                  f"Progresso: {d['progresso']}%")
-        return 200, "Historico listado com sucesso."
-    except Exception as e:
-        return 500, str(e)
+# ── READ (por utilizador) ────────────────────────────────────
+def obter_historico_utilizador(uid):
+    carregar()
+    codigo, _ = bd_utilizadores.obter_utilizador(uid)
+    if codigo == 404:
+        return 404, f"Utilizador '{uid}' nao encontrado."
+    registos = [hid for hid, h in historico.items() if h["idUtilizador"] == uid]
+    if not registos:
+        return 404, f"Nenhuma visualizacao registada para o utilizador '{uid}'."
+    return 200, registos
 
-# ── READ - consultar individual ──────────────────────────────────────────────
-def consultar_historico(hid):
-    # retorna 404 se o ID nao existir
+# ── UPDATE ───────────────────────────────────────────────────
+def atualizar_historico(hid, progresso=None):
+    carregar()
     if hid not in historico:
-        return 404, "Registo de historico nao encontrado."
+        return 404, f"Registo '{hid}' nao encontrado."
+    if progresso is not None:
+        if not validar_progresso(str(progresso)):
+            return 400, "Progresso invalido. Use um valor entre 0 e 100."
+        historico[hid]["progresso"] = round(float(progresso), 1)
+    guardar()
+    return 200, hid
 
-    try:
-        return 200, historico[hid]
-    except Exception as e:
-        return 500, str(e)
-
-# ── UPDATE ───────────────────────────────────────────────────────────────────
-def atualizar_historico(hid, progresso):
-    # retorna 404 se o ID nao existir
-    if hid not in historico:
-        return 404, "Registo de historico nao encontrado."
-
-    if progresso and not validar_progresso(progresso):
-        return 400, "Progresso invalido. Deve ser um valor inteiro entre 0 e 100."
-
-    try:
-        if progresso:
-            historico[hid]["progresso"]        = int(progresso)
-            # atualiza a data para registar quando foi visto pela ultima vez
-            historico[hid]["dataVisualizacao"] = datetime.now().strftime("%d/%m/%Y %H:%M")
-
-        return 200, "Registo de historico atualizado com sucesso."
-    except Exception as e:
-        return 500, str(e)
-
-# ── DELETE ───────────────────────────────────────────────────────────────────
+# ── DELETE ───────────────────────────────────────────────────
 def remover_historico(hid):
-    # retorna 404 se o ID nao existir
+    carregar()
     if hid not in historico:
-        return 404, "Registo de historico nao encontrado."
-
-    try:
-        del historico[hid]
-        return 200, "Registo de historico removido com sucesso."
-    except Exception as e:
-        return 500, str(e)
+        return 404, f"Registo '{hid}' nao encontrado."
+    del historico[hid]
+    guardar()
+    return 200, hid
