@@ -3,12 +3,17 @@
 # armazena e gere as recomendacoes
 # retorna tuplos (codigo_http, mensagem)
 # ==============================
-import json, os
+import json, os, logging, random
 from datetime import datetime
-import random
 from utils import gerar_id_recomendacao
 import utilizadores as bd_utilizadores
 import conteudo as bd_conteudo
+
+logging.basicConfig(
+    filename="app.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 FICHEIRO = "recomendacoes.json"
 recomendacoes = {}
@@ -44,9 +49,12 @@ def criar_recomendacao(uid, cid, motivo=None):
     carregar()
     codigo, _ = bd_utilizadores.obter_utilizador(uid)
     if codigo == 404:
+        logging.error(f"Falha ao criar recomendacao: utilizador '{uid}' nao encontrado.")
         return 404, f"Utilizador '{uid}' nao encontrado."
-    codigo_c, dados_c = bd_conteudo.obter_conteudo(cid)
+    codigo_c, _ = bd_conteudo.obter_conteudo(cid)
+    dados_c = bd_conteudo.conteudos.get(cid, {})
     if codigo_c == 404:
+        logging.error(f"Falha ao criar recomendacao: conteudo '{cid}' nao encontrado.")
         return 404, f"Conteudo '{cid}' nao encontrado."
     if not motivo or not str(motivo).strip():
         motivo = random.choice(MOTIVOS_AUTO)
@@ -61,6 +69,7 @@ def criar_recomendacao(uid, cid, motivo=None):
         "motivo":          motivo.strip()
     }
     guardar()
+    logging.info(f"Recomendacao '{rid}' gerada para utilizador '{uid}' -> conteudo '{cid}' ({motivo}).")
     return 201, rid
 
 # ── READ (todas) ─────────────────────────────────────────────
@@ -74,6 +83,7 @@ def listar_recomendacoes():
 def obter_recomendacao(rid):
     carregar()
     if rid not in recomendacoes:
+        logging.warning(f"Recomendacao nao encontrada: '{rid}'.")
         return 404, f"Recomendacao '{rid}' nao encontrada."
     return 200, rid
 
@@ -92,6 +102,7 @@ def obter_recomendacoes_utilizador(uid):
 def atualizar_recomendacao(rid, motivo=None, score_relevancia=None):
     carregar()
     if rid not in recomendacoes:
+        logging.warning(f"Tentativa de atualizar recomendacao inexistente: '{rid}'.")
         return 404, f"Recomendacao '{rid}' nao encontrada."
     if motivo and str(motivo).strip():
         recomendacoes[rid]["motivo"] = motivo.strip()
@@ -101,13 +112,16 @@ def atualizar_recomendacao(rid, motivo=None, score_relevancia=None):
             return 400, "Score invalido. Use um valor entre 0 e 10."
         recomendacoes[rid]["scoreRelevancia"] = score
     guardar()
+    logging.info(f"Recomendacao '{rid}' atualizada.")
     return 200, rid
 
 # ── DELETE ───────────────────────────────────────────────────
 def remover_recomendacao(rid):
     carregar()
     if rid not in recomendacoes:
+        logging.warning(f"Tentativa de remover recomendacao inexistente: '{rid}'.")
         return 404, f"Recomendacao '{rid}' nao encontrada."
     del recomendacoes[rid]
     guardar()
+    logging.info(f"Recomendacao '{rid}' removida.")
     return 200, rid
